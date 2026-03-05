@@ -61,11 +61,10 @@ const runMigrations = async () => {
   }
 };
 
-// Middleware to ensure database connection
+// Middleware to ensure database connection (checking isConnected is fast)
 const dbMiddleware = async (req, res, next) => {
   try {
     await initializeDatabase();
-    await runMigrations();
     next();
   } catch (err) {
     console.error("Database connection middleware error:", err);
@@ -280,8 +279,11 @@ module.exports = app;
 // Listen only if running directly
 if (require.main === module) {
   const PORT = process.env.PORT || 4000;
-  app.listen(PORT, () => {
-    console.log(`Finance Backend (MongoDB) running on port ${PORT}`);
+  initializeDatabase().then(() => {
+    runMigrations(); // Run migrations once on start
+    app.listen(PORT, () => {
+      console.log(`Finance Backend (MongoDB) running on port ${PORT}`);
+    });
   });
 }
 

@@ -34,6 +34,8 @@ const customerSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: String, default: () => new Date().toISOString().split('T')[0] }
 });
+customerSchema.index({ userId: 1 });
+customerSchema.index({ createdAt: -1 });
 
 const loanSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
@@ -44,6 +46,8 @@ const loanSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['active', 'closed'], default: 'active' }
 });
+loanSchema.index({ userId: 1 });
+loanSchema.index({ customerId: 1 });
 
 const paymentSchema = new mongoose.Schema({
   loanId: { type: mongoose.Schema.Types.ObjectId, ref: 'Loan', required: true },
@@ -53,6 +57,10 @@ const paymentSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   notes: String
 });
+paymentSchema.index({ userId: 1 });
+paymentSchema.index({ loanId: 1 });
+paymentSchema.index({ customerId: 1 });
+paymentSchema.index({ date: -1 });
 
 const notificationSchema = new mongoose.Schema({
   type: { type: String, required: true },
@@ -62,6 +70,8 @@ const notificationSchema = new mongoose.Schema({
   date: { type: String, required: true },
   read: { type: Boolean, default: false }
 });
+notificationSchema.index({ userId: 1 });
+notificationSchema.index({ date: -1 });
 
 const settingSchema = new mongoose.Schema({
   key: { type: String, unique: true, required: true },
@@ -76,6 +86,7 @@ const userSchema = new mongoose.Schema({
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   createdAt: { type: String, default: () => new Date().toISOString().split('T')[0] }
 });
+userSchema.index({ email: 1 });
 
 const Customer = mongoose.model('Customer', customerSchema);
 const User = mongoose.model('User', userSchema);
