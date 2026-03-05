@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const MONGODB_URI = "mongodb+srv://sachin:student123@cluster0.pgfrxp6.mongodb.net/finance";
+const MONGODB_URI = process.env.MONGODB_URI;
 
 async function initializeDatabase() {
   try {
