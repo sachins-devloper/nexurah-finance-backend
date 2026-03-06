@@ -104,6 +104,13 @@ Most endpoints require a `userId` query parameter for data isolation. For employ
 }
 ```
 
+### Update Payment
+`PUT /api/payments/:id?userId={userId}`
+
+### Delete Payment
+`DELETE /api/payments/:id?userId={userId}`
+
+
 ---
 
 ## Notifications

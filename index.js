@@ -189,6 +189,25 @@ app.post('/api/payments', asyncHandler(async (req, res) => {
   res.status(201).json({ ...payment.toObject(), id: payment._id });
 }));
 
+app.put('/api/payments/:id', asyncHandler(async (req, res) => {
+  const userFilter = await getFilter(req);
+  if (!userFilter) return res.status(403).json({ message: "Unauthorized" });
+  const filter = { ...userFilter, _id: req.params.id };
+  const payment = await Payment.findOneAndUpdate(filter, req.body, { new: true });
+  if (!payment) return res.status(404).json({ message: "Payment not found or unauthorized" });
+  res.json({ ...payment.toObject(), id: payment._id });
+}));
+
+
+app.delete('/api/payments/:id', asyncHandler(async (req, res) => {
+  const userFilter = await getFilter(req);
+  if (!userFilter) return res.status(403).json({ message: "Unauthorized" });
+  const filter = { ...userFilter, _id: req.params.id };
+  const result = await Payment.findOneAndDelete(filter);
+  if (!result) return res.status(404).json({ message: "Payment not found or unauthorized" });
+  res.status(204).end();
+}));
+
 // --- Notifications ---
 app.get('/api/notifications', asyncHandler(async (req, res) => {
   const filter = await getFilter(req);
