@@ -44,7 +44,8 @@ const loanSchema = new mongoose.Schema({
   startDate: { type: String, required: true },
   notes: String,
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  status: { type: String, enum: ['active', 'closed'], default: 'active' }
+  status: { type: String, enum: ['active', 'closed', 'overdue'], default: 'active' },
+  closedDate: String
 });
 loanSchema.index({ userId: 1 });
 loanSchema.index({ customerId: 1 });
@@ -55,6 +56,7 @@ const paymentSchema = new mongoose.Schema({
   date: { type: String, required: true },
   amount: { type: Number, required: true },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  type: { type: String, enum: ['interest', 'closure'], default: 'interest' },
   notes: String
 });
 paymentSchema.index({ userId: 1 });

@@ -174,6 +174,39 @@ app.get('/api/loans/:id', asyncHandler(async (req, res) => {
   res.json({ ...loan.toObject(), id: loan._id });
 }));
 
+app.post('/api/loans/:id/close', asyncHandler(async (req, res) => {
+  const userFilter = await getFilter(req);
+  if (!userFilter) return res.status(403).json({ message: "Unauthorized" });
+
+  const { paymentAmount, paymentDate, notes } = req.body;
+  const loanId = req.params.id;
+
+  const loan = await Loan.findOne({ ...userFilter, _id: loanId });
+  if (!loan) return res.status(404).json({ message: "Loan not found" });
+
+  // 1. Record final payment
+  const payment = new Payment({
+    loanId,
+    customerId: loan.customerId,
+    date: paymentDate,
+    amount: paymentAmount,
+    userId: loan.userId,
+    type: 'closure',
+    notes: notes || "Loan Closure Payment"
+  });
+  await payment.save();
+
+  // 2. Update loan status
+  loan.status = 'closed';
+  loan.closedDate = paymentDate;
+  await loan.save();
+
+  res.json({
+    loan: { ...loan.toObject(), id: loan._id },
+    payment: { ...payment.toObject(), id: payment._id }
+  });
+}));
+
 // --- Payments ---
 app.get('/api/payments', asyncHandler(async (req, res) => {
   const filter = await getFilter(req);
