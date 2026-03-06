@@ -59,6 +59,7 @@ Most endpoints require a `userId` query parameter for data isolation. For employ
 
 ### Delete Customer
 `DELETE /api/customers/:id?userId={userId}`
+**Note:** Performing this action will trigger a **cascading delete**, automatically removing all loans and payments associated with this customer.
 
 ---
 
@@ -78,9 +79,37 @@ Most endpoints require a `userId` query parameter for data isolation. For employ
   "interestRate": 3,
   "startDate": "2026-03-05",
   "notes": "Emergency loan",
-  "userId": "69a9585fd3af3f357d16989b"
+  "userId": "69a9585fd3af3f357d16989b",
+  "status": "active" 
 }
 ```
+**Status Options:** `active`, `closed`, `overdue`
+
+### Close Loan (Settlement)
+`POST /api/loans/:id/close?userId={userId}`
+
+Used to finalize a loan with a principal repayment.
+
+**Request Payload:**
+```json
+{
+  "paymentAmount": 51500,
+  "paymentDate": "2026-06-10",
+  "notes": "Full settlement"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "loan": { "status": "closed", "closedDate": "2026-06-10", ... },
+  "payment": { "type": "closure", "amount": 51500, ... }
+}
+```
+
+### Delete Loan
+`DELETE /api/loans/:id?userId={userId}`
+**Note:** triggers a **cascading delete**, removing all payment history for this loan.
 
 ---
 
@@ -100,9 +129,11 @@ Most endpoints require a `userId` query parameter for data isolation. For employ
   "amount": 1500,
   "date": "2026-04-05",
   "notes": "First installment",
-  "userId": "69a9585fd3af3f357d16989b"
+  "userId": "69a9585fd3af3f357d16989b",
+  "type": "interest"
 }
 ```
+**Type Options:** `interest` (default), `closure`
 
 ### Update Payment
 `PUT /api/payments/:id?userId={userId}`
@@ -134,8 +165,9 @@ Most endpoints require a `userId` query parameter for data isolation. For employ
 **Request Payload:**
 ```json
 {
-  "companyName": "Nexurah",
-  "defaultInterestRate": 3
+  "businessName": "Nexurah",
+  "currency": "INR",
+  "interestModel": "monthly"
 }
 ```
 

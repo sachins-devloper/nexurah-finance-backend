@@ -147,6 +147,12 @@ app.delete('/api/customers/:id', asyncHandler(async (req, res) => {
   const filter = { ...userFilter, _id: req.params.id };
   const result = await Customer.findOneAndDelete(filter);
   if (!result) return res.status(404).json({ message: "Customer not found or unauthorized" });
+
+  // Cascading delete: Remove loans and payments associated with this customer
+  const customerId = req.params.id;
+  await Loan.deleteMany({ customerId });
+  await Payment.deleteMany({ customerId });
+
   res.status(204).end();
 }));
 
@@ -172,6 +178,20 @@ app.get('/api/loans/:id', asyncHandler(async (req, res) => {
   const loan = await Loan.findOne(filter);
   if (!loan) return res.status(404).json({ message: "Loan not found or unauthorized" });
   res.json({ ...loan.toObject(), id: loan._id });
+}));
+
+app.delete('/api/loans/:id', asyncHandler(async (req, res) => {
+  const userFilter = await getFilter(req);
+  if (!userFilter) return res.status(403).json({ message: "Unauthorized" });
+  const filter = { ...userFilter, _id: req.params.id };
+  const result = await Loan.findOneAndDelete(filter);
+  if (!result) return res.status(404).json({ message: "Loan not found or unauthorized" });
+
+  // Cascading delete: Remove payments associated with this loan
+  const loanId = req.params.id;
+  await Payment.deleteMany({ loanId });
+
+  res.status(204).end();
 }));
 
 app.post('/api/loans/:id/close', asyncHandler(async (req, res) => {
