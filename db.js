@@ -84,11 +84,19 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  companyName: { type: String },
   role: { type: String, enum: ['admin', 'employee'], default: 'employee' },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   createdAt: { type: String, default: () => new Date().toISOString().split('T')[0] }
 });
-userSchema.index({ email: 1 });
+// Removed redundant index
+
+const otpSchema = new mongoose.Schema({
+  email: { type: String, required: true },
+  otp: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now, expires: 600 } // OTP expires in 10 minutes
+});
+otpSchema.index({ email: 1 });
 
 const Customer = mongoose.model('Customer', customerSchema);
 const User = mongoose.model('User', userSchema);
@@ -96,6 +104,7 @@ const Loan = mongoose.model('Loan', loanSchema);
 const Payment = mongoose.model('Payment', paymentSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 const Setting = mongoose.model('Setting', settingSchema);
+const OTP = mongoose.model('OTP', otpSchema);
 
 module.exports = { 
   initializeDatabase,
@@ -104,5 +113,6 @@ module.exports = {
   Loan,
   Payment,
   Notification,
-  Setting
+  Setting,
+  OTP
 };

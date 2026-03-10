@@ -8,9 +8,11 @@ const {
   Loan, 
   Payment, 
   Notification, 
-  Setting 
+  Setting,
+  OTP
 } = require('./db');
 const asyncHandler = require('express-async-handler');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -20,46 +22,6 @@ app.use(express.json());
 
 const { Types } = require('mongoose');
 
-let isMigrationDone = false;
-
-// Function to handle database seeding and migrations
-const runMigrations = async () => {
-  if (isMigrationDone) return;
-
-  try {
-    // Seed default admin if no users exist
-    const userCount = await User.countDocuments();
-    if (userCount === 0) {
-      const defaultAdmin = new User({
-        name: "System Admin",
-        email: "admin@nexurah.com",
-        password: "admin", 
-        role: "admin",
-        status: "active"
-      });
-      await defaultAdmin.save();
-      console.log("Default admin account created: admin@nexurah.com / admin");
-    }
-
-    // Basic migrations
-    await User.updateMany({ status: { $exists: false } }, { $set: { status: 'active' } });
-
-    const defaultUser = await User.findOne({ role: 'admin' });
-    if (defaultUser) {
-      await Promise.all([
-        Customer.updateMany({ userId: { $exists: false } }, { $set: { userId: defaultUser._id } }),
-        Loan.updateMany({ userId: { $exists: false } }, { $set: { userId: defaultUser._id } }),
-        Payment.updateMany({ userId: { $exists: false } }, { $set: { userId: defaultUser._id } }),
-        Notification.updateMany({ userId: { $exists: false } }, { $set: { userId: defaultUser._id } }),
-      ]);
-    }
-    isMigrationDone = true;
-    console.log("Migrations and seeding checked/completed.");
-  } catch (err) {
-    console.error("Migration error:", err);
-    // Don't throw here, migrations failing shouldn't necessarily crash the whole app
-  }
-};
 
 // Middleware to ensure database connection (checking isConnected is fast)
 const dbMiddleware = async (req, res, next) => {
@@ -295,6 +257,142 @@ app.post('/api/settings', asyncHandler(async (req, res) => {
   res.json(updates);
 }));
 
+// --- Auth & Sign-up ---
+
+// Send OTP
+app.post('/api/auth/send-otp', asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  console.log(`[AUTH] Sending OTP to: ${email}`);
+  if (!email) return res.status(400).json({ message: "Email is required" });
+
+  try {
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[AUTH] OTP generated for ${email}: ${otpCode} (Use this if email fails)`);
+    await OTP.findOneAndUpdate(
+      { email },
+      { otp: otpCode, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.MAIL_USER,
+      to: email,
+      subject: 'Your Nexurah OTP for Sign-up',
+      text: `Your OTP for Nexurah Finance sign-up is: ${otpCode}. It will expire in 10 minutes.`
+    });
+    
+    console.log(`[AUTH] OTP sent successfully to: ${email}`);
+    res.json({ message: "OTP sent successfully" });
+  } catch (error) {
+    console.error("[AUTH] Mail Error:", error);
+    res.status(500).json({ message: `Email failed: ${error.message}` });
+  }
+}));
+
+// Verify OTP and Sign Up
+app.post('/api/auth/signup', asyncHandler(async (req, res) => {
+  const { name, email, password, otp, companyName } = req.body;
+
+  // 1. Verify OTP
+  const otpRecord = await OTP.findOne({ email, otp });
+  if (!otpRecord) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
+
+  // 2. Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return res.status(400).json({ message: "User already exists with this email" });
+  }
+
+  // 3. Create User
+  const user = new User({
+    name,
+    email,
+    password, // Consider hashing this if needed, but the project seems to use plain text for now
+    companyName,
+    role: 'employee',
+    status: 'active'
+  });
+  await user.save();
+
+  // 4. Delete used OTP
+  await OTP.deleteOne({ _id: otpRecord._id });
+
+  res.status(201).json({ 
+    message: "User registered successfully",
+    user: { id: user._id, name: user.name, email: user.email, role: user.role, companyName: user.companyName }
+  });
+}));
+
+// Reset Password - Send OTP
+app.post('/api/auth/forgot-password', asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email is required" });
+
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ message: "No account found with this email" });
+
+  try {
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[AUTH] Reset OTP generated for ${email}: ${otpCode}`);
+    
+    await OTP.findOneAndUpdate(
+      { email },
+      { otp: otpCode, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.MAIL_USER,
+      to: email,
+      subject: 'Reset Your Nexurah Password',
+      text: `Your OTP for resetting your Nexurah Finance password is: ${otpCode}. If you didn't request this, please ignore this email.`
+    });
+
+    res.json({ message: "Reset OTP sent successfully" });
+  } catch (error) {
+    console.error("[AUTH] Reset Mail Error:", error);
+    res.status(500).json({ message: `Failed to send reset email: ${error.message}` });
+  }
+}));
+
+// Reset Password - Finalize
+app.post('/api/auth/reset-password', asyncHandler(async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  const otpRecord = await OTP.findOne({ email, otp });
+  if (!otpRecord) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
+
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.password = newPassword;
+  await user.save();
+
+  await OTP.deleteOne({ _id: otpRecord._id });
+
+  res.json({ message: "Password reset successful" });
+}));
+
 // --- Users & Auth ---
 app.post('/api/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -303,7 +401,7 @@ app.post('/api/login', asyncHandler(async (req, res) => {
     if (user.status === 'inactive') {
       return res.status(403).json({ message: "Your account is inactive. Please contact admin." });
     }
-    res.json({ id: user._id, name: user.name, email: user.email, role: user.role });
+    res.json({ id: user._id, name: user.name, email: user.email, role: user.role, companyName: user.companyName });
   } else {
     res.status(401).json({ message: "Invalid credentials" });
   }
@@ -345,6 +443,15 @@ app.post('/api/users/:id/change-password', asyncHandler(async (req, res) => {
   res.json({ message: "Password updated successfully" });
 }));
 
+// Global error handler for JSON responses
+app.use((err, req, res, next) => {
+  console.error("Backend Error:", err.message);
+  res.status(err.status || 500).json({ 
+    message: err.message || "Internal Server Error",
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
 // Export for Vercel
 module.exports = app;
 
@@ -352,7 +459,6 @@ module.exports = app;
 if (require.main === module) {
   const PORT = process.env.PORT || 4000;
   initializeDatabase().then(() => {
-    runMigrations(); // Run migrations once on start
     app.listen(PORT, () => {
       console.log(`Finance Backend (MongoDB) running on port ${PORT}`);
     });
